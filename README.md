@@ -26,54 +26,136 @@ checks.
 
 ## Getting started
 
-Clone with submodules to include the pinned Thunderbolt source:
+The unified installer targets **MacBookPro14,1 on x86_64 Omarchy with Limine**.
+It applies the selected fixes to an existing Omarchy installation; it does not
+install the OS or partition disks. Fresh installation on the physical Mac is
+still awaiting acceptance testing.
+
+Clone with submodules to include the pinned Thunderbolt reference source:
 
 ```sh
 git clone --recurse-submodules https://github.com/connor981332/a1708-omarchy.git
 cd a1708-omarchy
 ```
 
-If you already cloned the repository:
+For an existing clone, run `git submodule update --init --recursive`.
+The package recipes fetch their own pinned source archives; they do not depend
+on local submodule modifications.
+
+Read [installation and recovery](docs/setup.md) before applying changes. Start
+with an updated Omarchy installation, Python 3, WirePlumber, `base-devel`, `git`,
+`dkms`, `wget`, `patch`, and headers matching **every installed kernel**.
+Internet access is required for upstream source and kernel-source downloads.
+Prerequisite provisioning is currently a separate maintenance step.
+
+From the repository root, as your ordinary desktop user:
 
 ```sh
-git submodule update --init --recursive
+./a1708-setup status
+./a1708-setup build
+./a1708-setup plan
 ```
 
-Use [unified setup](docs/setup.md) for the experimental automated route, or
-follow [manual installation and recovery](docs/installation.md), starting with
-Thunderbolt, then audio and the keyboard backlight hook. The component READMEs
-provide the details and rollback notes. The instructions cover both preparing
-the current audio source on a fresh installation and rebuilding an existing
-DKMS installation.
+`status` and `plan` are read-only. `build` creates packages and a checksum manifest
+under ignored `local/setup-bundle/` without installing host packages. Review the
+plan and resolve any reported blockers before applying:
 
-The documented installation uses Arch tooling, DKMS, matching kernel headers,
-and Omarchy's Limine boot-image tooling. Build the drivers for every kernel you
-intend to boot. The Thunderbolt module and the `s2idle` boot setting address
-separate problems; the module alone is not the complete fix.
+```sh
+sudo ./a1708-setup apply
+```
 
-After installation and reboot, follow the
-[verification procedure](docs/verification.md) to check audio, sleep/wake,
-backlight restoration, and connected devices.
+The installer builds/verifies both DKMS drivers for every installed kernel,
+installs the WirePlumber rule and backlight hook, sets the s2idle boot default,
+and regenerates Limine boot images. It does not reboot, suspend, reload live
+audio, or restart desktop audio services automatically.
 
-## Automation status
+After a successful apply, reboot before testing sleep, log into the desktop,
+and run:
 
-The experimental [`a1708-setup`](docs/setup.md) CLI now builds pinned audio and
-Thunderbolt DKMS packages, checks compatibility, installs all three selected
-fixes plus the s2idle boot setting, and records a rollback transaction. It
-supports read-only status/planning/verification and adopts matching existing
-manual audio sources. It does not reboot or suspend automatically.
+```sh
+./a1708-setup verify
+```
 
-Start with [unified setup](docs/setup.md), including prerequisites and recovery.
-[Validation and handoff](docs/setup-handoff.md) separates automated results from
-pending fresh-Omarchy and physical hardware tests. This is not yet a validated
-fresh-machine installer; only MacBookPro14,1 is supported.
+Then follow [hardware verification](docs/verification.md). Software verification
+alone does not establish working speakers, microphone, backlight, or peripherals
+after sleep. If applying or rebuilding boot images fails, follow the recovery
+guide before rebooting.
+
+To undo the recorded setup transaction:
+
+```sh
+sudo ./a1708-setup rollback
+```
+
+Rollback restores recorded package/file changes and regenerates boot images.
+Matching pre-existing packages, configuration, and adopted manual audio sources
+are retained. See [transactions and recovery](docs/setup.md#transactions-reruns-and-recovery)
+for drift checks, interrupted installations, and recovery-media instructions.
+The [manual installation guide](docs/installation.md) remains available for
+component-specific installation and repair.
+
+## Installer behavior and limits
+
+| Capability | Behavior |
+| --- | --- |
+| Compatibility checks | Requires MacBookPro14,1, the expected Alpine Ridge bridge and CS8409 codec, Omarchy/Limine, prerequisites, and matching kernel headers. |
+| Existing installations | Retains matching packages/files and adopts matching manual audio sources after checking their hashes and DKMS installation for every kernel. |
+| Configuration conflicts | Stops on unknown managed-file contents, competing DKMS versions, enabled Secure Boot, or a replacing Limine command-line assignment that would erase drop-in arguments. |
+| Reruns and rollback | An unchanged completed setup can be rerun without reinstalling packages or rebuilding images. One rollback baseline is retained at a time. |
+| Kernel maintenance | DKMS hooks build the drivers for added kernels. Repeat verification after kernel updates; future kernel compatibility is not guaranteed. |
+
+This remains experimental pending fresh Omarchy and physical hardware acceptance.
+Automatic prerequisite provisioning and multi-generation installer upgrades are
+not implemented. Audio's upstream kernel-source download retains its HTTPS and
+fallback behavior without independent checksum/signature verification; the
+[setup guide](docs/setup.md) explains this limitation and bundle trust.
 
 The audio reload/acoustic test scripts remain separate deliberate tools.
 `audio/historical/install-original.sh` restores the original audio driver; it
 is not the unified installer's rollback command or the current installer.
-The alternate historical audio patch must not be combined with the selected
-resume patch. The bundled Thunderbolt installer targets other distributions;
-use unified setup or the local Arch package recipe on Omarchy.
+Do not combine the historical audio patch with the selected resume patch.
+The bundled upstream Thunderbolt installer targets other distributions; use
+unified setup or the local Arch recipe on Omarchy. The Thunderbolt module and
+`s2idle` setting address separate problems and are both part of this setup.
+
+## Validation and remaining work
+
+The [validation record and handoff](docs/setup-handoff.md) documents the completed
+November 8–9, 2026 checks, source pins, environment versions, and reproduction
+steps:
+
+- **29 automated decision/transaction tests passed**, including compatibility,
+  conflicts, source adoption, failure recovery, reruns, and rollback.
+- Clean Arch builds and real DKMS installation passed for
+  **7.2.14-arch1-1** and **6.18.60-1-lts**, with matching module metadata.
+- Adding LTS after setup automatically built both drivers through pacman's hooks;
+  rollback removed their DKMS registrations for both kernels.
+- A complete unattended **UEFI apply → reboot → rollback → reboot** cycle passed
+  with real Limine boot-image generation and verification of the running s2idle
+  argument before rollback and its removal afterward.
+- [CI](https://github.com/connor981332/a1708-omarchy/actions/workflows/setup.yml)
+  passed and repeats offline/package/kernel-addition checks on pushes, PRs, and
+  weekly. The UEFI VM harness is available separately under `tests/`.
+
+The boot test used a minimal Arch VM with Omarchy boot tooling and explicit
+hardware/OS test doubles. It did not install a full Omarchy desktop or test the
+Mac's physical audio, Thunderbolt, backlight, or sleep behavior. The working
+Mac's drivers, boot configuration, and power state were unchanged during these
+automation tests.
+
+The mandatory next acceptance gate is **fresh Omarchy on the physical
+MacBookPro14,1**, preferably on a separate test SSD with its own EFI partition.
+The owner needs to provide and identify a disk whose contents may be erased,
+select the test installation at boot, and help with acoustic equipment and
+physical observations. Remaining checks include audio before/after sleep,
+actual lid-close/backlight restoration, USB-C peripherals, and sleep battery
+measurements. Because USB-C is being repaired, an external system disk can
+itself be affected by a controller failure.
+
+Future agents should read the [owner and agent handoff](docs/setup-handoff.md),
+check current PR/CI state, and preserve the working internal installation.
+Treat that document's branch/PR references as the implementation session's
+historical record; check whether they have merged before starting new work.
 
 ## Repository layout
 
@@ -85,7 +167,9 @@ use unified setup or the local Arch package recipe on Omarchy.
   installation/removal instructions.
 - [`setup/`](docs/setup.md): unified installer, transaction handling, and build staging.
 - [`tests/`](docs/setup-handoff.md): offline, disposable Arch, and UEFI VM tests.
-- [`docs/installation.md`](docs/installation.md): installation and rebuild steps.
+- [`docs/setup.md`](docs/setup.md): unified setup, prerequisites, and rollback.
+- [`docs/setup-handoff.md`](docs/setup-handoff.md): validation evidence and owner/agent tasks.
+- [`docs/installation.md`](docs/installation.md): manual installation and rebuild steps.
 - [`docs/verification.md`](docs/verification.md): hardware checks, recorded
   evidence, and outstanding validation.
 
