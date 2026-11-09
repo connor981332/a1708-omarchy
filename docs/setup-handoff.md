@@ -43,6 +43,14 @@ Thunderbolt is still `155ffe3a4a963bc8d84df72fa53f14eb16ea9a60`.
   A second apply was unchanged; rollback removed the newly added packages and
   managed files; a second rollback was unchanged. Hardware probes and
   `limine-mkinitcpio` were explicit test doubles in this test.
+- Post-install kernel maintenance passed separately: setup initially targeted
+  only `7.2.14-arch1-1`, then pacman installed `linux-lts` and matching headers
+  (`6.18.60-1-lts`). Its hooks automatically built/installed both selected
+  drivers for the added kernel; the test did not call the installer's repair
+  helper. `modinfo` paths/vermagic matched. Rollback removed the fix packages
+  and their DKMS registrations for both kernels while retaining the added kernel.
+  Evidence: `local/setup-cache/kernel-addition.log` (ignored). CI now repeats this
+  kernel-addition path with `--exercise-kernel-addition`.
 - Read-only planning on the working Mac found no blockers, adopted the matching
   manual audio source, retained the Thunderbolt package and backlight hook, and
   proposed the owned boot drop-in and system-wide WirePlumber rule. Nothing was
@@ -50,9 +58,10 @@ Thunderbolt is still `155ffe3a4a963bc8d84df72fa53f14eb16ea9a60`.
   paths; the other existing software checks passed.
 
 CI in `.github/workflows/setup.yml` repeats offline checks and real package/DKMS
-lifecycle tests against Arch linux and linux-lts, on PRs and weekly.
-[GitHub run 42574617250](https://github.com/connor981332/a1708-omarchy/actions/runs/42574617250)
-passed both jobs for implementation commit `3e00c61` (26 offline tests and real
+lifecycle tests against Arch linux and linux-lts, including automatic builds
+when LTS is added after setup, on PRs and weekly.
+[GitHub run 42581654102](https://github.com/connor981332/a1708-omarchy/actions/runs/42581654102)
+passed both jobs for implementation commit `4a6c0f5` (29 offline tests and real
 Arch package/DKMS lifecycle). Inspect the latest PR checks after later commits.
 
 ## Reproducing isolated tests
@@ -87,6 +96,9 @@ isolated root with `A1708_TEST_KVM=1`. No host packages, drivers, boot entries, 
    This is intentionally destructive inside that disposable installation. It
    refuses the actual Mac model, installed fix packages, an existing setup
    journal, or installed Limine tooling. Use a new test root for a fresh run.
+   To test kernel maintenance, start with only `linux`/`linux-headers` installed
+   and add `--exercise-kernel-addition`; the test installs LTS/headers after
+   setup and requires the package hooks alone to build both drivers.
 
 For a VM, install `qemu-system-x86 qemu-img edk2-ovmf xorriso` in the isolated
 root. Obtain the official Arch `cloudimg.qcow2` and published checksum from
@@ -118,20 +130,46 @@ harness allows three boot passes, with a 30-minute timeout per pass. Hardware
 probes and the OS ID remain test doubles; this is a minimal Arch VM with the
 Omarchy boot tooling, not a full Omarchy desktop installation.
 
-## VM result status
+## Real UEFI boot result: PASS
 
-The real apply boot has passed with `mem_sleep_default=s2idle`; rollback image
-generation also passed after normalizing the cloud image's persistent EFI mount.
-The final uninterrupted three-boot harness run is being checked before recording
-a complete PASS. Tool versions observed in the VM: Limine `12.9.6-1`,
-`limine-mkinitcpio-hook` `1.40.0-2`, mkinitcpio `42.2-1`, DKMS `3.4.4-1`,
-Linux/headers `7.2.14.arch1-1`.
+The final unattended three-boot run completed successfully on November 9:
 
-VM fixture fixes preserve the image hash during UKI inspection, use Limine's
-double-quoted command-line format, maintain a regular EFI mount across reboots,
-and recognize result markers even when a login prompt precedes them. These are
-test-environment adaptations; the installer does not rewrite the host's EFI
-mount units or bootloader menu.
+1. Fresh Arch cloud image boot; real package installation, DKMS compilation,
+   matching module metadata, unchanged rerun and package rollback passed.
+2. Real Limine setup generated UKIs containing `mem_sleep_default=s2idle`.
+   Inspection preserved image bytes and their recorded hashes. The guest
+   rebooted through Limine and verified the argument in `/proc/cmdline`.
+3. Installer rollback removed the added packages/configuration and regenerated
+   real boot images. A second reboot verified that the argument and both added
+   packages were absent. The guest emitted `A1708_VM_LIMINE_BOOT_TEST_PASS` and
+   `A1708_VM_FINISHED_OK`; the host harness exited zero and reported PASS.
+
+Observed VM versions: Limine `12.9.6-1`, `limine-mkinitcpio-hook` `1.40.0-2`,
+mkinitcpio `42.2-1`, DKMS `3.4.4-1`, Linux/headers `7.2.14.arch1-1`.
+All 29 offline tests also passed inside the VM. Host-side syntax/compilation
+checks and ShellCheck on the shell harnesses passed.
+
+The real boot check uses a minimal Arch VM plus Omarchy boot tooling. Hardware
+probes and OS ID use explicit test doubles; the boot-image command, package
+operations, EFI files and reboot transitions are real. It does not establish
+working audio, Thunderbolt, backlight or sleep on the physical Mac, and it does
+not constitute a full fresh Omarchy desktop installation.
+
+VM fixture adaptations use Limine's double-quoted command-line format, maintain
+a regular EFI mount across reboots, preserve image hashes during inspection,
+and tolerate terminal/login prefixes on result markers. The installer does not
+rewrite the host's EFI mount units or bootloader menu.
+
+Local evidence is retained under `local/setup-cache/vm-final.log` and
+`local/test-root/root.x86_64/work/vm-final/serial.log`. The final VM overlay,
+base image, build bundle and isolated tools remain available for follow-up.
+Retired failed VM images were removed; their logs remain under
+`local/setup-cache/retired-vm-logs/`.
+These ignored artifacts are not part of the PR; the reproducible sources,
+procedures and sanitized results are tracked here. Task-owned test paths are
+`local/setup-cache/`, `local/setup-bundle/` and `local/test-root/`. Never remove
+the whole `local/` directory: its existing archive/builds/machine notes predate
+this implementation and are unrelated user data.
 
 ## What the owner needs to do
 
@@ -162,16 +200,18 @@ before acting. Keep the existing branch/PR; do not create a duplicate or merge.
   Read local test artifacts only if needed; do not publish raw logs or private
   notes. Rerun offline tests after changes and real integration when behavior
   changes. Preserve the user's working installation.
-- Finish **actual Omarchy/Limine boot-image integration** in a disposable full
-  Omarchy VM if feasible: apply, inspect generated command lines/images, reboot,
-  check the active command line, rollback, and reboot again. An Arch cloud VM
-  using the test double does not satisfy this check. Add an explicit test fixture
-  around hardware probing, rather than a production `--force` hardware bypass.
+- The real Limine apply/reboot/rollback/reboot cycle already passed as recorded
+  above. A full fresh Omarchy installation remains untested; the mandatory next
+  acceptance gate is the physical Mac installation below. A full Omarchy VM is
+  an optional additional check if investigating OS-specific integration. Keep
+  hardware test doubles in fixtures, never add a production `--force` bypass.
 - Perform fresh Omarchy installation and acceptance on MacBookPro14,1 when the
   owner provides a test disk and is available for physical steps. Do not uninstall
   working fixes from the internal installation to manufacture a clean test.
-- Validate a real rolling kernel upgrade and recovery with the installer-managed
-  packages; current two-kernel compilation does not prove all future updates.
+- Kernel addition after setup and automatic DKMS builds already passed. Continue
+  checking new kernel/header releases with CI; a future version-replacement
+  upgrade and physical post-upgrade behavior still need their own results.
+  Two-kernel compilation and kernel addition do not prove every future update.
 - Consider hardening upstream audio's kernel-source retrieval (verified exact
   tarballs and no fallback) as a separate packaging change with provenance and
   tests. The present package intentionally retains upstream behavior.
@@ -181,5 +221,5 @@ before acting. Keep the existing branch/PR; do not create a duplicate or merge.
   transactions until that baseline is rolled back. Do not describe this as a
   complete unattended upgrade manager.
 - Record fresh results with date, OS/kernel/package versions and tests performed.
-  Keep the PR draft until the boot and hardware checks pass; report remaining
+  Keep the PR draft until fresh-Omarchy and hardware acceptance pass; report remaining
   gaps explicitly. Follow the authorized commit/push/PR workflow for fixes.

@@ -20,12 +20,12 @@ jobs:
     container: archlinux:base-devel
     timeout-minutes: 45
     steps:
-      - run: pacman -Syu --noconfirm --needed git python dkms wget patch linux linux-headers linux-lts linux-lts-headers wireplumber
+      - run: pacman -Syu --noconfirm --needed git python dkms wget patch linux linux-headers wireplumber
       - uses: actions/checkout@v4
       - name: Build as an ordinary user
         run: |
           useradd -m builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
           runuser -u builder -- ./a1708-setup build
-      - name: Exercise real packages in disposable container
-        run: A1708_DISPOSABLE_TEST=1 python3 tests/arch-integration.py local/setup-bundle
+      - name: Install packages, add LTS kernel, verify automatic DKMS builds, roll back
+        run: A1708_DISPOSABLE_TEST=1 python3 tests/arch-integration.py local/setup-bundle --exercise-kernel-addition
