@@ -219,7 +219,10 @@ class Machine:
         if ('0x8086', '0x1578') not in pci:
             blockers.append('Expected Alpine Ridge PCI bridge 8086:1578 is absent.')
         codecs = list(self.path('/proc/asound').glob('card*/codec*'))
-        if not any('0x10138409' in p.read_text() for p in codecs if p.is_file()):
+        # sysfs identifies the codec even before a working ALSA card is registered.
+        codecs += list(self.path('/sys/bus/hdaudio/devices').glob('*/vendor_id'))
+        if not any('0x10138409' in self.read(str(p.relative_to(self.root))).lower()
+                   for p in codecs if p.is_file()):
             blockers.append('Expected CS8409 codec ID 0x10138409 is absent.')
         if not self.path('/usr/bin/limine-mkinitcpio').is_file():
             blockers.append('limine-mkinitcpio is required.')

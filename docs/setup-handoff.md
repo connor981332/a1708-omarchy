@@ -27,10 +27,10 @@ Thunderbolt is still `155ffe3a4a963bc8d84df72fa53f14eb16ea9a60`.
 
 ## Completed automated checks
 
-- **28 offline decision/transaction tests** cover incompatible hardware/OS, missing
+- **29 offline decision/transaction tests** cover incompatible hardware/OS, missing
   devices and headers, enabled Secure Boot, source adoption, competing DKMS
-  versions, configuration/symlink conflicts and Limine command-line precedence, bundle corruption and path
-  traversal, multiple kernels, package replacement with rollback archives,
+  versions, configuration/symlink conflicts, Limine command-line precedence,
+  codec detection before ALSA card registration, bundle corruption/path traversal, multiple kernels, package replacement with rollback archives,
   package/file drift, private journal versus readable system-config permissions,
   reruns, failed builds/package hooks/boot rebuilding, and rollback retries.
 - Both Arch packages built on the working host **without installation** and in
@@ -61,8 +61,7 @@ Host sudo and Docker access were unavailable. The sandbox device view hid
 `/dev/kvm`; a later direct host check found KVM available and accessible without
 administrator authentication. Rootless user namespaces with subordinate UID/GID
 mappings worked; the final VM run explicitly binds only `/dev/kvm` into the
-isolated root with `A1708_TEST_KVM=1`. No host packages,
-drivers, boot entries, user configuration, or power state were changed.
+isolated root with `A1708_TEST_KVM=1`. No host packages, drivers, boot entries, user configuration, or power state were changed.
 
 1. Download an official Arch bootstrap archive and signature from
    `https://geo.mirror.pkgbuild.com/iso/latest/`. Verify with the installed Arch
@@ -94,24 +93,26 @@ root. Obtain the official Arch `cloudimg.qcow2` and published checksum from
 `https://geo.mirror.pkgbuild.com/images/latest/`. In this session its SHA-256
 matched the HTTPS-published checksum. The downloaded image was
 `Arch-Linux-x86_64-cloudimg-20261101.620452.qcow2`, SHA-256
-`794eb4889b39e1f0ed7d5ae998b2a1ed2137db8cf8c3476cf2962c7437ecb003`; its signing key was not in either local
-Arch keyring, so independent signature verification was **not** completed.
+`794eb4889b39e1f0ed7d5ae998b2a1ed2137db8cf8c3476cf2962c7437ecb003`.
+Its signing key was not in either local Arch keyring, so independent signature verification was **not** completed.
 
 Run `tests/vm-smoke.sh CLOUDIMG BUNDLE NEW_WORK_DIRECTORY OVMF_DIRECTORY`.
 It uses KVM when accessible (otherwise software CPU emulation), a new overlay
-disk, UEFI firmware variables,
-a cloud-init seed containing only the test payload, and outbound user networking.
+disk, UEFI firmware variables, a cloud-init seed containing only the test payload, and outbound user networking.
 It passes no host credentials or host directory mounts. Serial output and disk
-artifacts stay in the ignored work directory. Each boot pass has a 30-minute timeout;
-PASS requires the guest's success marker, not merely QEMU exiting successfully.
+artifacts stay in the ignored work directory. Each boot pass has a 30-minute
+timeout; PASS requires the guest's success marker, not merely QEMU exiting successfully.
 The cloud-init seed stops network-time waiting (user-mode networking may not
 support NTP) and uses a virtual RNG to avoid entropy starvation.
+Each pass also exposes a local Unix monitor socket for headless diagnostics.
 The guest first exercises a real boot and package lifecycle with a boot-image
 test double. It then runs `tests/limine-vm.py` against real Limine tooling,
 using the public Omarchy repository key in `tests/fixtures/omarchy.asc`
 (fingerprint `40DFB630FF42BCFFB047046CF0134EE680CAC571`, copied from the
 installed `omarchy-keyring` 20251027-1; no private key material). The second
-stage generates UKIs, checks their embedded s2idle argument, reboots, verifies
+stage makes the guest EFI mount persistent (masking GPT-generated automount),
+generates UKIs, checks their embedded s2idle argument without modifying the
+images or invalidating their hashes, reboots, verifies
 the running argument, rolls back, and reboots again to verify removal. The
 harness allows three boot passes, with a 30-minute timeout per pass. Hardware
 probes and the OS ID remain test doubles; this is a minimal Arch VM with the
@@ -119,11 +120,18 @@ Omarchy boot tooling, not a full Omarchy desktop installation.
 
 ## VM result status
 
-The UEFI VM harness and real Limine acceptance test are implemented. Final
-execution results are recorded below when available; implementation alone is
-not a passing boot test. Early attempts reached UEFI/Linux boot but were stopped
-while guest startup waited for time synchronization. The final seed explicitly
-stops that wait and supplies virtual entropy.
+The real apply boot has passed with `mem_sleep_default=s2idle`; rollback image
+generation also passed after normalizing the cloud image's persistent EFI mount.
+The final uninterrupted three-boot harness run is being checked before recording
+a complete PASS. Tool versions observed in the VM: Limine `12.9.6-1`,
+`limine-mkinitcpio-hook` `1.40.0-2`, mkinitcpio `42.2-1`, DKMS `3.4.4-1`,
+Linux/headers `7.2.14.arch1-1`.
+
+VM fixture fixes preserve the image hash during UKI inspection, use Limine's
+double-quoted command-line format, maintain a regular EFI mount across reboots,
+and recognize result markers even when a login prompt precedes them. These are
+test-environment adaptations; the installer does not rewrite the host's EFI
+mount units or bootloader menu.
 
 ## What the owner needs to do
 

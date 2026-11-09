@@ -8,18 +8,17 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import shlex
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from setup.a1708_setup import PACKAGES, Machine, run
+from setup.a1708_setup import PACKAGES, Machine, digest, run
 
 REPO = Path(__file__).resolve().parents[1]
 PHASE = Path('/var/lib/a1708-vm-boot-test/phase')
 
 
 def say(text):
-    print(text, flush=True)
+    print('\n' + text, flush=True)
 
 
 def reboot():
@@ -63,47 +62,51 @@ def prepare():
     # this disposable cloud image to a regular EFI mount, as on recorded Omarchy.
     run(['systemctl', 'stop', 'efi.automount', 'efi.mount'], check=False)
     run(['umount', esp], check=False)
-    fstab = Path('/etc/fstab')
-    lines = []
-    for line in fstab.read_text().splitlines():
-        fields = line.split()
-        if len(fields) >= 4 and fields[1] == esp:
-            options = [x for x in fields[3].split(',') if x != 'noauto'
-                       and not x.startswith(('x-systemd.automount', 'x-systemd.idle-timeout'))]
-            fields[3] = ','.join(options) or 'defaults'
-            line = '\t'.join(fields)
-        lines.append(line)
-    fstab.write_text('\n'.join(lines) + '\n')
-    run(['systemctl', 'daemon-reload'])
+    # GPT-auto generation would recreate the automount after reboot. Override
+    # it persistently with an explicit ordinary EFI mount for all boot passes.
+    run(['systemctl', 'mask', 'efi.automount'])
     Path(esp).mkdir(exist_ok=True)
-    run(['mount', '-t', 'vfat', partitions[0], esp])
+    Path('/etc/systemd/system/efi.mount').write_text(
+        '[Unit]\nDescription=Disposable VM ordinary EFI mount\nBefore=local-fs.target\n'
+        f'[Mount]\nWhat={partitions[0]}\nWhere=/efi\nType=vfat\nOptions=umask=0077\n'
+        '[Install]\nWantedBy=local-fs.target\n')
+    run(['systemctl', 'daemon-reload'])
+    run(['systemctl', 'enable', '--now', 'efi.mount'])
     filesystem = run(['findmnt', '-n', '-o', 'FSTYPE', esp]).stdout.strip()
     if filesystem != 'vfat':
         raise RuntimeError('Guest ESP is not a regular vfat mount: ' + filesystem)
     say('A1708_VM_ESP ' + esp + ' ' + filesystem)
     Path('/etc/default/limine').write_text(
-        f'ESP_PATH={shlex.quote(esp)}\nKERNEL_CMDLINE[default]+={shlex.quote(cmdline)}\n'
+        f'ESP_PATH={json.dumps(esp)}\nKERNEL_CMDLINE[default]+={json.dumps(cmdline)}\n'
         'ENABLE_UKI=yes\nMKINITCPIO_FALLBACK=no\nENABLE_LIMINE_FALLBACK=yes\n'
         'BOOT_ORDER="linux, *"\n')
     run(['pacman', '-Syu', '--noconfirm', '--needed', 'limine', 'limine-mkinitcpio-hook', 'efibootmgr'])
+    say('A1708_VM_TOOL_VERSIONS ' + run(['pacman', '-Q', 'limine', 'limine-mkinitcpio-hook', 'mkinitcpio', 'dkms', 'linux', 'linux-headers']).stdout.replace('\n', '; '))
     run(['limine-install', '--fallback'])
     os.umask(0o077)
     machine = integration.TestMachine()
     if machine.plan(REPO / 'local/setup-bundle')['blockers']:
         raise RuntimeError('Unexpected real boot-tool preflight blockers')
     machine.apply(REPO / 'local/setup-bundle')
+    config = Path(esp) / 'limine.conf'
+    config.write_text('serial: yes\n' + config.read_text())
     images = list(Path(esp).glob('EFI/Linux/*.efi'))
     if not images:
         raise RuntimeError('No generated UKIs')
     for image in images:
         section = Path('/run/a1708-vm-cmdline')
-        run(['objcopy', '--dump-section', f'.cmdline={section}', image])
+        before = digest(image)
+        # objcopy can rewrite PE input even with --dump-section. Use a separate
+        # output image so Limine's already-recorded BLAKE2 hash remains valid.
+        run(['objcopy', '--dump-section', f'.cmdline={section}', image, '/run/a1708-vm-inspect.efi'])
+        if digest(image) != before:
+            raise RuntimeError('UKI inspection modified the boot image')
         if 'mem_sleep_default=s2idle' not in section.read_text().replace('\x00', '').split():
             raise RuntimeError('Generated UKI lacks s2idle')
     PHASE.parent.mkdir(mode=0o700, parents=True)
     PHASE.write_text('applied')
     Path('/etc/systemd/system/a1708-vm-accept.service').write_text(
-        '[Unit]\nDescription=Disposable A1708 Limine boot acceptance\nAfter=local-fs.target\n'
+        '[Unit]\nDescription=Disposable A1708 Limine boot acceptance\nAfter=local-fs.target efi.mount\nRequiresMountsFor=/efi\n'
         '[Service]\nType=oneshot\nEnvironment=A1708_DISPOSABLE_TEST=1\n'
         'ExecStart=/usr/bin/python3 /work/repo/tests/limine-vm.py advance\n'
         'StandardOutput=tty\nStandardError=tty\nTTYPath=/dev/console\n'

@@ -56,7 +56,8 @@ journals. Exit status is nonzero for blocked plans or failed verification.
 ## What apply does
 
 1. Validates the bundle, model, Omarchy ID, Alpine Ridge bridge `8086:1578`,
-   CS8409 codec `0x10138409`, Limine tooling, prerequisites, and kernel headers.
+   CS8409 codec `0x10138409` (sysfs or ALSA identification), Limine tooling,
+   prerequisites, and kernel headers.
    Secure Boot with unsigned modules is blocked.
 2. Installs `a1708-audio-dkms` and `tb-ar-shim-dkms` where needed. Existing exact
    package versions are retained. A replacement requires the exact previous
@@ -132,6 +133,11 @@ manual fixes in place. User edits to managed file contents or modes, unexpected 
 versions, and missing/modified rollback archives block rollback before it makes
 changes. Resolve that drift deliberately; do not delete the journal to bypass it.
 Rollback itself can be retried after a boot-image regeneration failure.
+
+Limine needs a normally mounted FAT32 ESP with enough free space. The presence
+of its executable alone does not prove the boot environment is ready. Cloud
+image EFI automounts can expose an `autofs` layer that Limine rejects; the test
+fixture uses an explicit persistent mount, while recorded Omarchy uses `/boot`.
 
 If boot-image generation fails, do not reboot until it succeeds. Inspect the
 reported error (for example ESP free space, kernel headers, DKMS build logs),

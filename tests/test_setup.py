@@ -147,6 +147,11 @@ class SetupTests(unittest.TestCase):
         self.assertTrue(any('8086:1578' in b for b in blockers))
         self.assertTrue(any('CS8409' in b for b in blockers))
 
+    def test_codec_detection_does_not_require_registered_alsa_card(self):
+        self.machine.path('/proc/asound/card0/codec#0').unlink()
+        self.write('/sys/bus/hdaudio/devices/hdaudioC0D0/vendor_id', '0x10138409')
+        self.assertEqual(self.machine.plan(self.bundle)['blockers'], [])
+
     def test_missing_headers_never_silently_skipped(self):
         self.machine.path('/usr/lib/modules/test/build/Makefile').unlink()
         with self.assertRaisesRegex(SetupError, 'Missing matching headers'):

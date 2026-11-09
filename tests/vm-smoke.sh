@@ -68,13 +68,19 @@ timeout 1800 qemu-system-x86_64 \
   -drive if=virtio,format=qcow2,file="$work/disk.qcow2" \
   -drive media=cdrom,format=raw,readonly=on,file="$work/seed.iso" \
   -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0 \
-  -nic user,model=virtio-net-pci -display none -monitor none -serial stdio -no-reboot \
+  -nic user,model=virtio-net-pci -display none -monitor "unix:$work/monitor-$pass.sock,server=on,wait=off" -serial stdio -no-reboot \
   >> "$work/serial.log" 2>&1
-if grep -q "^A1708_VM_FINISHED_OK" "$work/serial.log"; then break; fi
-if grep -q "^A1708_VM_FINISHED_FAILED" "$work/serial.log"; then break; fi
+if grep -q "A1708_VM_FINISHED_OK" "$work/serial.log"; then break; fi
+if grep -q "A1708_VM_FINISHED_FAILED" "$work/serial.log"; then break; fi
+case $pass in
+  1) grep -q 'A1708_VM_REBOOT_AFTER_APPLY' "$work/serial.log" || break ;;
+  2) grep -q 'A1708_VM_REBOOT_AFTER_ROLLBACK' "$work/serial.log" || break ;;
+esac
 done
-grep -q '^A1708_VM_FINISHED_OK' "$work/serial.log" || {
+# Login prompts/terminal escapes may precede a marker on the same serial line.
+if ! grep -q 'A1708_VM_FINISHED_OK' "$work/serial.log" ||
+   grep -q 'A1708_VM_FINISHED_FAILED' "$work/serial.log"; then
   tail -80 "$work/serial.log" >&2
   exit 1
-}
+fi
 echo "PASS: UEFI Arch VM package lifecycle and real Limine apply/rollback reboots; see $work/serial.log"
