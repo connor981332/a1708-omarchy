@@ -1,0 +1,3 @@
+[submodule "thunderbolt"]
+	path = thunderbolt/linux-apple-alpine-ridge-suspend
+	url = https://github.com/orospakr/linux-apple-alpine-ridge-suspend.git

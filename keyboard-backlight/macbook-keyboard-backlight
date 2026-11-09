@@ -1,0 +1,25 @@
+#!/bin/bash
+# MacBookPro14,1 SPI LEDs lack automatic suspend blanking.
+set -euo pipefail
+[[ $(cat /sys/class/dmi/id/product_name) == MacBookPro14,1 ]] || exit 0
+led=/sys/class/leds/spi::kbd_backlight/brightness
+state=/run/macbook-keyboard-backlight
+[[ -w $led ]] || exit 0
+case ${1:-} in
+  pre)
+    umask 077
+    cat "$led" > "$state"
+    printf '0\n' > "$led"
+    logger -t macbook-keyboard-backlight 'Backlight blanked before sleep'
+    ;;
+  post)
+    if [[ -f $state ]]; then
+      read -r level < "$state"
+      if [[ $level =~ ^[0-9]+$ ]] && (( level <= 255 )); then
+        printf '%s\n' "$level" > "$led"
+      fi
+      rm -f "$state"
+      logger -t macbook-keyboard-backlight 'Backlight restored after sleep'
+    fi
+    ;;
+esac

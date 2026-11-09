@@ -1,0 +1,5 @@
+/local/
+/thunderbolt/packaging/arch/src/
+/thunderbolt/packaging/arch/pkg/
+/thunderbolt/packaging/arch/*.pkg.tar.*
+/thunderbolt/packaging/arch/*.log
