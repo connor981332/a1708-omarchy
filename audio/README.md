@@ -31,3 +31,13 @@ Do not apply both patches.
 `historical/install-original.sh` deliberately installs the original unpatched
 driver. It requires `--restore-original` to avoid accidental rollback. It is
 not the current reinstall procedure. Full machine-specific rollback records remain in the excluded local archive.
+
+## Automated packaging
+
+[Unified setup](../docs/setup.md) stages the adjacent Arch recipe with the
+selected patch and builds `a1708-audio-dkms/0.1.resume1-1`. Fresh installations
+place package-owned source at `/usr/src/snd_hda_macbookpro-0.1.resume1`; existing
+matching manual sources are adopted without relocation. DKMS retains the
+`snd_hda_macbookpro/0.1.resume1` identity. The system-wide WirePlumber rule is
+installed separately with rollback tracking. This package has no dependency on
+the historical installer. Kernel-source downloading remains upstream behavior.

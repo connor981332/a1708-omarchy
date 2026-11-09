@@ -1,0 +1,25 @@
+pkgname=a1708-audio-dkms
+pkgver=0.1.resume1
+pkgrel=1
+pkgdesc='CS8409 driver with system-sleep resume fix for MacBookPro14,1'
+arch=('x86_64')
+options=('!debug')
+url='https://github.com/davidjo/snd_hda_macbookpro'
+license=('GPL-2.0-only')
+depends=('dkms' 'wget' 'patch')
+makedepends=('patch')
+_commit=89b22ff90b86468b186706861dd18663562defa7
+source=("audio-$_commit.tar.gz::https://codeload.github.com/davidjo/snd_hda_macbookpro/tar.gz/$_commit"
+        'audio-system-resume.diff')
+sha256sums=('da831e4616f69af02b09d0d938f9ea1bc26f2a0dd16010c6004cc512b0619110'
+            '68a2d27f5522fbf3e03801f57899125d3e696c11135cc5f2f7db628ab13bd91c')
+prepare() {
+  cd "snd_hda_macbookpro-$_commit"
+  patch --batch --fuzz=0 -p1 < ../audio-system-resume.diff
+  sed -i 's/^PACKAGE_VERSION=.*/PACKAGE_VERSION="0.1.resume1"/' dkms.conf
+}
+package() {
+  local dest="$pkgdir/usr/src/snd_hda_macbookpro-$pkgver"
+  install -dm755 "$dest"
+  cp -r --preserve=mode,timestamps "snd_hda_macbookpro-$_commit/." "$dest/"
+}

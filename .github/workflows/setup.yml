@@ -1,0 +1,31 @@
+name: Setup validation
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 8 * * 1'
+permissions:
+  contents: read
+jobs:
+  decisions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tests -v
+      - run: python3 -m compileall -q setup tests
+      - run: bash -n tests/with-arch-root.sh audio/packaging/arch/PKGBUILD thunderbolt/packaging/arch/PKGBUILD
+  arch-packages:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    timeout-minutes: 45
+    steps:
+      - run: pacman -Syu --noconfirm --needed git python dkms wget patch linux linux-headers wireplumber
+      - uses: actions/checkout@v4
+      - name: Build as an ordinary user
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          runuser -u builder -- ./a1708-setup build
+      - name: Install packages, add LTS kernel, verify automatic DKMS builds, roll back
+        run: A1708_DISPOSABLE_TEST=1 python3 tests/arch-integration.py local/setup-bundle --exercise-kernel-addition

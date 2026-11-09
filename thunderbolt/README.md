@@ -11,18 +11,21 @@ failure. See [installation](../docs/installation.md).
 
 ## Local Arch package
 
-The [PKGBUILD](packaging/arch/PKGBUILD) reads module files from the adjacent
-checkout, pinned to commit `155ffe3a4a963bc8d84df72fa53f14eb16ea9a60` and verified
-by SHA-256. Three relative symlinks expose the canonical sources to makepkg. It stages
-files during `makepkg`; no second maintained source copy
-is needed. To build without installing:
+The [PKGBUILD](packaging/arch/PKGBUILD) fetches the upstream archive at
+`155ffe3a4a963bc8d84df72fa53f14eb16ea9a60`, verified by SHA-256. It is now
+self-contained for clean builds and does not depend on adjacent checkout
+symlinks. The pinned submodule remains the browsable upstream reference.
 
 ```sh
 cd packaging/arch
 makepkg
 ```
 
-Install dependencies separately if makepkg reports any. When updating upstream,
-review and update both the pinned commit and checksums. Existing package and
-staging artifacts are preserved under `local/builds/thunderbolt/` at the project
-root. Staging symlinks now use relative paths to the canonical module source.
+[Unified setup](../docs/setup.md) stages this recipe and handles installation,
+DKMS verification for every installed kernel, the separate s2idle boot setting,
+and rollback. A standalone package install alone does not configure s2idle.
+The upstream README's anticipated automatic Omarchy integration should not be
+assumed to be present; the installer checks actual local state.
+
+When updating upstream, review and update the pinned archive revision and
+checksum. Build outputs remain ignored under `local/` or the packaging directory.

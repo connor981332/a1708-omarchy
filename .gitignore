@@ -3,3 +3,10 @@
 /thunderbolt/packaging/arch/pkg/
 /thunderbolt/packaging/arch/*.pkg.tar.*
 /thunderbolt/packaging/arch/*.log
+
+__pycache__/
+*.pyc
+/audio/packaging/arch/src/
+/audio/packaging/arch/pkg/
+/audio/packaging/arch/*.pkg.tar.*
+/audio/packaging/arch/*.log

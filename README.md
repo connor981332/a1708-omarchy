@@ -2,8 +2,8 @@
 
 Fixes, installation notes, and recovery tools for running **Omarchy Linux on an
 Apple A1708 MacBook Pro**. This repository documents the hardware issues found
-along the way, preserves the patches used to address them, and aims to automate
-their application with shell scripts.
+along the way, preserves the patches used to address them, and provides an
+experimental setup CLI to apply them together.
 
 The recorded setup is a **2017 13-inch MacBook Pro, MacBookPro14,1** (two
 Thunderbolt 3 ports, no Touch Bar), running Omarchy / Arch Linux. Other A1708
@@ -39,7 +39,8 @@ If you already cloned the repository:
 git submodule update --init --recursive
 ```
 
-Follow [installation and recovery](docs/installation.md), starting with
+Use [unified setup](docs/setup.md) for the experimental automated route, or
+follow [manual installation and recovery](docs/installation.md), starting with
 Thunderbolt, then audio and the keyboard backlight hook. The component READMEs
 provide the details and rollback notes. The instructions cover both preparing
 the current audio source on a fresh installation and rebuilding an existing
@@ -56,26 +57,23 @@ backlight restoration, and connected devices.
 
 ## Automation status
 
-Automation is a project goal, but there is **no single installer that applies
-all current fixes**. Today the repository provides:
+The experimental [`a1708-setup`](docs/setup.md) CLI now builds pinned audio and
+Thunderbolt DKMS packages, checks compatibility, installs all three selected
+fixes plus the s2idle boot setting, and records a rollback transaction. It
+supports read-only status/planning/verification and adopts matching existing
+manual audio sources. It does not reboot or suspend automatically.
 
-| Tool | What it does |
-| --- | --- |
-| [Thunderbolt Arch package recipe](thunderbolt/packaging/arch/PKGBUILD) | Builds a DKMS package from the pinned upstream module. Package installation and boot configuration are separate steps. |
-| [Keyboard backlight hook](keyboard-backlight/macbook-keyboard-backlight) | Automatically blanks and restores the backlight around sleep once manually installed. |
-| [Audio reload script](audio/reload-audio.sh) | Reloads the audio driver and restarts user audio services. Run as the desktop user with sudo credentials available; it interrupts current audio and does not install patches. |
-| [Audio test script](audio/test-audio.sh) | Tests internal speakers and microphone through acoustic loopback using a Yeti X microphone and Sound Blaster Play! 3. Requires those devices and changes playback volume/mute settings. |
+Start with [unified setup](docs/setup.md), including prerequisites and recovery.
+[Validation and handoff](docs/setup-handoff.md) separates automated results from
+pending fresh-Omarchy and physical hardware tests. This is not yet a validated
+fresh-machine installer; only MacBookPro14,1 is supported.
 
-Applying the current audio resume patch, registering it with DKMS, installing
-the WirePlumber rule, and installing the backlight hook remain documented
-manual steps. The bundled upstream Thunderbolt installer targets other
-distributions; use the [local Arch packaging instructions](thunderbolt/README.md)
-for this setup.
-
-`audio/historical/install-original.sh` is a guarded rollback tool for the
-original audio driver, **not the installer for the current fix**. The alternate
-audio patch under `audio/historical/` is also retained for reference; do not
-combine it with the selected resume patch.
+The audio reload/acoustic test scripts remain separate deliberate tools.
+`audio/historical/install-original.sh` restores the original audio driver; it
+is not the unified installer's rollback command or the current installer.
+The alternate historical audio patch must not be combined with the selected
+resume patch. The bundled Thunderbolt installer targets other distributions;
+use unified setup or the local Arch package recipe on Omarchy.
 
 ## Repository layout
 
@@ -85,6 +83,8 @@ combine it with the selected resume patch.
   Arch package recipe for the suspend/resume module.
 - [`keyboard-backlight/`](keyboard-backlight/README.md): systemd sleep hook and
   installation/removal instructions.
+- [`setup/`](docs/setup.md): unified installer, transaction handling, and build staging.
+- [`tests/`](docs/setup-handoff.md): offline, disposable Arch, and UEFI VM tests.
 - [`docs/installation.md`](docs/installation.md): installation and rebuild steps.
 - [`docs/verification.md`](docs/verification.md): hardware checks, recorded
   evidence, and outstanding validation.

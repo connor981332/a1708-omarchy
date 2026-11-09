@@ -1,23 +1,19 @@
 pkgname=tb-ar-shim-dkms
 pkgver=1.0.0
 pkgrel=1
-pkgdesc='Apple Alpine Ridge Thunderbolt suspend/resume fix (local upstream build)'
+pkgdesc='Apple Alpine Ridge Thunderbolt suspend/resume fix'
 arch=('x86_64')
+options=('!debug')
 url='https://github.com/orospakr/linux-apple-alpine-ridge-suspend'
 license=('GPL-2.0-only')
 depends=('dkms')
-# Resolve relative to the recipe, even when makepkg stages files elsewhere.
-_upstream="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../linux-apple-alpine-ridge-suspend" && pwd)"
 _commit=155ffe3a4a963bc8d84df72fa53f14eb16ea9a60
-if [[ $(git -C "$_upstream" rev-parse HEAD) != "$_commit" ]]; then
-  error 'Upstream commit differs from the reviewed packaging revision'
-  return 1
-fi
-source=('tb_ar_shim.c' 'Makefile' 'dkms.conf')
-sha256sums=('96d3177fe297320fea73089a4ce531db0b5782109f00e9294931eec30ed717dc'
-            'ce31529f6d636e650cc1195af41e1270c2efe1ed33c28fcc613cee268b803329'
-            'b271b43f035f1d8694679972bc9bf47610b4370c741a369f5e7ba0b65be705e0')
+source=("thunderbolt-$_commit.tar.gz::https://codeload.github.com/orospakr/linux-apple-alpine-ridge-suspend/tar.gz/$_commit")
+sha256sums=('9e97c8e4fd78bcd2a40dcb3665438b50289849182962e4646ec52eec3720a73e')
 package() {
-  install -Dm644 "$srcdir/tb_ar_shim.c" "$pkgdir/usr/src/tb-ar-shim-$pkgver/tb_ar_shim.c"
-  install -m644 "$srcdir/Makefile" "$srcdir/dkms.conf" "$pkgdir/usr/src/tb-ar-shim-$pkgver/"
+  local upstream="$srcdir/linux-apple-alpine-ridge-suspend-$_commit"
+  local dest="$pkgdir/usr/src/tb-ar-shim-$pkgver"
+  install -dm755 "$dest"
+  install -m644 "$upstream"/module/{tb_ar_shim.c,Makefile,dkms.conf} "$dest/"
+  install -Dm644 "$upstream/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

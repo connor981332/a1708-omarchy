@@ -23,3 +23,12 @@ Its GPL-2.0-only license and attribution are retained in the submodule.
 This collection does not claim authorship of third-party work or apply a new
 blanket license to it. No additional license is assigned to the local scripts
 and documentation in this initial publication.
+
+## Omarchy VM test trust anchor
+
+`tests/fixtures/omarchy.asc` is the **public** package-signing key from the
+installed `omarchy-keyring` package, version `20251027-1`, used only to initialize
+the disposable VM's package trust. Fingerprint:
+`40DFB630FF42BCFFB047046CF0134EE680CAC571`. Upstream package source:
+[omacom/omarchy-pkgs](https://github.com/omacom/omarchy-pkgs).
+It contains no private key material and does not change the host's keyring.

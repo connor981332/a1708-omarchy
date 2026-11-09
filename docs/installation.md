@@ -1,5 +1,9 @@
 # Installation and recovery
 
+For automated installation of all selected fixes, see [unified setup](setup.md).
+The commands below remain the manual route and recovery reference. Do not run
+them concurrently with the unified installer.
+
 These commands are instructions for deliberate system changes. The directory
 reorganization itself did not install drivers or change system configuration.
 Commands below assume the project root unless stated otherwise.
