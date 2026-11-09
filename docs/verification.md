@@ -26,3 +26,12 @@ For a deliberate hardware check:
 
 Record new results with date, kernel versions, patch/module versions, and the
 specific tests performed. Keep historical results distinct from fresh checks.
+
+## Unified setup software validation
+
+The installer adds read-only `status`, `plan`, and `verify` commands. Its
+[validation record and future-session handoff](setup-handoff.md) documents
+package builds, real DKMS installation and rollback in an isolated Arch root,
+and remaining Omarchy/Limine and hardware acceptance. These software checks did
+not reboot, suspend, or acoustically retest the working Mac. The historical
+hardware results above are unchanged.
