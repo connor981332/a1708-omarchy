@@ -40,6 +40,7 @@ bootcmd:
 runcmd:
   - |
     exec > /dev/console 2>&1
+    test ! -f /var/lib/a1708-vm-boot-test/phase || exit 0
     mkdir -p /mnt/seed /work/repo
     mount -o ro /dev/sr0 /mnt/seed
     tar -xzf /mnt/seed/payload.tar.gz -C /work/repo
@@ -54,10 +55,14 @@ EOF
 xorriso -as mkisofs -quiet -volid cidata -joliet -rock -output "$work/seed.iso" "$work/seed"
 qemu-img create -f qcow2 -F qcow2 -b "$image" "$work/disk.qcow2" 16G
 cp "$firmware/OVMF_VARS.4m.fd" "$work/vars.fd"
-# No host directories, USB devices, credentials or privileged acceleration are passed through.
+# No host directories, block/USB devices or credentials are passed through.
+acceleration=(-accel 'tcg,thread=multi' -cpu max)
+if [[ -c /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]; then
+  acceleration=(-accel kvm -cpu host)
+fi
 for ((pass = 1; pass <= 3; pass++)); do
 timeout 1800 qemu-system-x86_64 \
-  -machine q35 -accel tcg,thread=multi -cpu max -smp 2 -m 3072 \
+  -machine q35 "${acceleration[@]}" -smp 2 -m 3072 \
   -drive if=pflash,format=raw,readonly=on,file="$firmware/OVMF_CODE.4m.fd" \
   -drive if=pflash,format=raw,file="$work/vars.fd" \
   -drive if=virtio,format=qcow2,file="$work/disk.qcow2" \

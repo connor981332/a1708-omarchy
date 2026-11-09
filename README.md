@@ -2,8 +2,8 @@
 
 Fixes, installation notes, and recovery tools for running **Omarchy Linux on an
 Apple A1708 MacBook Pro**. This repository documents the hardware issues found
-along the way, preserves the patches used to address them, and aims to automate
-their application with shell scripts.
+along the way, preserves the patches used to address them, and provides an
+experimental setup CLI to apply them together.
 
 The recorded setup is a **2017 13-inch MacBook Pro, MacBookPro14,1** (two
 Thunderbolt 3 ports, no Touch Bar), running Omarchy / Arch Linux. Other A1708

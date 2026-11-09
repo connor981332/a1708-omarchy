@@ -1,6 +1,7 @@
 #!/bin/bash
 # Execute in a disposable extracted Arch bootstrap root, using user namespaces.
-# No host sudo, device passthrough, sysfs, boot mounts, or host package writes.
+# No host sudo, sysfs, boot mounts, or host package writes.
+# A1708_TEST_KVM=1 optionally binds only /dev/kvm for the disposable emulator.
 set -euo pipefail
 if (( $# < 2 )); then
   echo "Usage: $0 /absolute/path/to/root.x86_64 command [args...]" >&2
@@ -21,6 +22,11 @@ exec unshare --user --map-auto --map-root-user --mount --pid --fork \
       touch "$root/dev/$device"
       mount --bind "/dev/$device" "$root/dev/$device"
     done
+    if [[ ${A1708_TEST_KVM:-0} == 1 ]]; then
+      [[ -c /dev/kvm && -r /dev/kvm && -w /dev/kvm ]] || exit 2
+      touch "$root/dev/kvm"
+      mount --bind /dev/kvm "$root/dev/kvm"
+    fi
     ln -sfn /proc/self/fd "$root/dev/fd"
     ln -sfn /proc/self/fd/0 "$root/dev/stdin"
     ln -sfn /proc/self/fd/1 "$root/dev/stdout"

@@ -4,9 +4,13 @@ This document accompanies the experimental unified installer. Keep software
 results separate from physical hardware acceptance. It is a solo implementation;
 no agent delegation was used and no working-machine installation was performed.
 
+Implementation branch: `feat/unified-setup`.
+[Draft PR #2](https://github.com/connor981332/a1708-omarchy/pull/2) targets `master`.
+Update that PR; do not open a duplicate or merge without separate instruction.
+
 ## Recorded environment and source
 
-Session date: November 8, 2026 America/Denver (some test logs use November 9 UTC).
+Session dates: November 8–9, 2026 America/Denver (test logs also use UTC).
 The observed machine is a 2017 MacBookPro14,1, Omarchy 4.5.0 / package 4.5.0-3,
 with `linux` 7.2.11.arch1-1 and `linux-omarchy` 7.2.15-1, matching headers,
 DKMS 3.4.4-1, and WirePlumber 0.5.18-1. The running kernel is 7.2.15-1-omarchy.
@@ -23,9 +27,9 @@ Thunderbolt is still `155ffe3a4a963bc8d84df72fa53f14eb16ea9a60`.
 
 ## Completed automated checks
 
-- **26 offline decision/transaction tests** cover incompatible hardware/OS, missing
+- **28 offline decision/transaction tests** cover incompatible hardware/OS, missing
   devices and headers, enabled Secure Boot, source adoption, competing DKMS
-  versions, configuration/symlink conflicts, bundle corruption and path
+  versions, configuration/symlink conflicts and Limine command-line precedence, bundle corruption and path
   traversal, multiple kernels, package replacement with rollback archives,
   package/file drift, private journal versus readable system-config permissions,
   reruns, failed builds/package hooks/boot rebuilding, and rollback retries.
@@ -46,13 +50,18 @@ Thunderbolt is still `155ffe3a4a963bc8d84df72fa53f14eb16ea9a60`.
   paths; the other existing software checks passed.
 
 CI in `.github/workflows/setup.yml` repeats offline checks and real package/DKMS
-lifecycle tests against Arch linux and linux-lts, on PRs and weekly. A successful
-local run is not a claim that remote CI has run or passed; inspect the PR checks.
+lifecycle tests against Arch linux and linux-lts, on PRs and weekly.
+[GitHub run 42574617250](https://github.com/connor981332/a1708-omarchy/actions/runs/42574617250)
+passed both jobs for implementation commit `3e00c61` (26 offline tests and real
+Arch package/DKMS lifecycle). Inspect the latest PR checks after later commits.
 
 ## Reproducing isolated tests
 
-Host sudo and Docker access were unavailable; `/dev/kvm` was absent. Rootless
-user namespaces with subordinate UID/GID mappings worked. No host packages,
+Host sudo and Docker access were unavailable. The sandbox device view hid
+`/dev/kvm`; a later direct host check found KVM available and accessible without
+administrator authentication. Rootless user namespaces with subordinate UID/GID
+mappings worked; the final VM run explicitly binds only `/dev/kvm` into the
+isolated root with `A1708_TEST_KVM=1`. No host packages,
 drivers, boot entries, user configuration, or power state were changed.
 
 1. Download an official Arch bootstrap archive and signature from
@@ -60,6 +69,8 @@ drivers, boot entries, user configuration, or power state were changed.
    keyring (dearmor an ASCII keyring before passing it to `gpgv`). This session's
    bootstrap signature verified against Pierre Schmitz's key
    `3E80CA1A8B89F69CBA57D98A76A5EF9054449A5C`.
+   Recorded November 1 bootstrap SHA-256:
+   `655bc99849b80859173fa39338a6c910185e952173f6a1a61526cfa34ab8339c`.
 2. Extract into an ignored `local/` directory inside a user namespace. Configure
    the disposable root's mirrorlist, initialize/populate its pacman keyring,
    and install `base-devel python git dkms wget patch wireplumber linux
@@ -81,11 +92,14 @@ drivers, boot entries, user configuration, or power state were changed.
 For a VM, install `qemu-system-x86 qemu-img edk2-ovmf xorriso` in the isolated
 root. Obtain the official Arch `cloudimg.qcow2` and published checksum from
 `https://geo.mirror.pkgbuild.com/images/latest/`. In this session its SHA-256
-matched the HTTPS-published checksum; its signing key was not in either local
+matched the HTTPS-published checksum. The downloaded image was
+`Arch-Linux-x86_64-cloudimg-20261101.620452.qcow2`, SHA-256
+`794eb4889b39e1f0ed7d5ae998b2a1ed2137db8cf8c3476cf2962c7437ecb003`; its signing key was not in either local
 Arch keyring, so independent signature verification was **not** completed.
 
 Run `tests/vm-smoke.sh CLOUDIMG BUNDLE NEW_WORK_DIRECTORY OVMF_DIRECTORY`.
-It uses software CPU emulation, a new overlay disk, UEFI firmware variables,
+It uses KVM when accessible (otherwise software CPU emulation), a new overlay
+disk, UEFI firmware variables,
 a cloud-init seed containing only the test payload, and outbound user networking.
 It passes no host credentials or host directory mounts. Serial output and disk
 artifacts stay in the ignored work directory. Each boot pass has a 30-minute timeout;

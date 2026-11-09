@@ -280,6 +280,12 @@ class Machine:
             file_actions.append({'path': name, 'action': 'keep' if path.is_file()
                                  and path.read_bytes() == content and path.stat().st_mode & 0o777 == mode
                                  else 'write'})
+        # Limine loads /etc/default/limine after all drop-ins. A replacement
+        # assignment there discards the s2idle argument installed above.
+        default_config = self.read('/etc/default/limine')
+        if re.search(r'^\s*KERNEL_CMDLINE\[default\]\s*=', default_config, re.M):
+            blockers.append('/etc/default/limine replaces the default command line after drop-ins; '
+                            'review its KERNEL_CMDLINE[default]= assignment and use += to retain drop-in arguments.')
         for path in self.path('/etc/limine-entry-tool.d').glob('*.conf'):
             if path == self.path(BOOT):
                 continue
@@ -379,7 +385,7 @@ class Machine:
             state['status'] = 'complete'
             self.save(state)
             return {'status': 'complete', 'reboot_required': True,
-                    'message': 'Reboot when convenient, restart desktop audio or log in again, then run verify.'}
+                    'message': 'Reboot before sleep testing, log into the desktop, then run verify.'}
         except Exception as error:
             state['error'] = str(error)
             self.save(state)

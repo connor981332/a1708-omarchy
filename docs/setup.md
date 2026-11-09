@@ -67,7 +67,11 @@ journals. Exit status is nonzero for blocked plans or failed verification.
 4. Installs the system WirePlumber rule, the backlight sleep hook, and a dedicated
    Limine drop-in for `mem_sleep_default=s2idle`. Unknown file contents, symlinks
    at managed paths, and conflicting sleep defaults in other Limine drop-ins
-   block installation rather than overwrite user configuration.
+   block installation rather than overwrite user configuration. A replacing
+   `KERNEL_CMDLINE[default]=` in `/etc/default/limine` also blocks preflight:
+   Limine loads that file last, so it must use append-style `+=` to retain
+   drop-in arguments. Review that change deliberately, preserving all existing
+   root/encryption arguments.
 5. Runs `limine-mkinitcpio` after configuration is in place. Package hooks may
    also rebuild initramfs earlier; this final rebuild includes the boot setting.
 
@@ -83,7 +87,7 @@ occurs. Reboot at a convenient time and log into the desktop, then run:
 ./a1708-setup verify
 ```
 
-A passing software check is **not** a passing acoustic or sleep test. Follow
+Software checks and acoustic/sleep acceptance are separate results. Follow
 [hardware verification](verification.md) afterward.
 
 ## Existing manually configured machines

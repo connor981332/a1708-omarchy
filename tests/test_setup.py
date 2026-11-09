@@ -195,6 +195,16 @@ class SetupTests(unittest.TestCase):
         self.write('/etc/limine-entry-tool.d/custom.conf', 'KERNEL_CMDLINE[default]+=" mem_sleep_default=deep"')
         self.assertTrue(any('Conflicting sleep' in b for b in self.machine.plan(self.bundle)['blockers']))
 
+    def test_high_priority_cmdline_replacement_blocks_before_installation(self):
+        self.write('/etc/default/limine', 'KERNEL_CMDLINE[default]="root=example rw"')
+        with self.assertRaisesRegex(SetupError, 'replaces the default command line'):
+            self.machine.apply(self.bundle)
+        self.assertFalse(self.machine.path(STATE).exists())
+
+    def test_high_priority_cmdline_append_keeps_dropins(self):
+        self.write('/etc/default/limine', 'KERNEL_CMDLINE[default]+=" root=example rw"')
+        self.assertEqual(self.machine.plan(self.bundle)['blockers'], [])
+
     def test_matching_manual_source_adopted_and_preserved(self):
         self.write('/usr/src/snd_hda_macbookpro-0.1.resume1/dkms.conf', 'source')
         self.commands.modules.add(('snd_hda_macbookpro', '0.1.resume1', 'test'))

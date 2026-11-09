@@ -49,12 +49,40 @@ def prepare():
                        if not x.startswith(('initrd=', 'BOOT_IMAGE=', 'mem_sleep_default=')))
     if 'root=' not in cmdline:
         raise RuntimeError('No root= in guest command line')
-    esp = next((p for p in ('/boot', '/efi', '/boot/efi') if
-                run(['findmnt', '-n', '-o', 'FSTYPE', p], check=False).stdout.strip() == 'vfat'), None)
-    if esp is None:
-        raise RuntimeError('No mounted ESP')
+    devices = json.loads(run(['lsblk', '--json', '--paths', '-o', 'PATH,PARTTYPE']).stdout)
+    def flatten(entries):
+        for entry in entries:
+            yield entry
+            yield from flatten(entry.get('children', []))
+    partitions = [d['path'] for d in flatten(devices['blockdevices'])
+                  if (d.get('parttype') or '').upper() == 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B']
+    if len(partitions) != 1:
+        raise RuntimeError('Expected exactly one disposable guest ESP')
+    esp = '/efi'
+    # Limine's mount validator sees the autofs layer instead of vfat. Normalize
+    # this disposable cloud image to a regular EFI mount, as on recorded Omarchy.
+    run(['systemctl', 'stop', 'efi.automount', 'efi.mount'], check=False)
+    run(['umount', esp], check=False)
+    fstab = Path('/etc/fstab')
+    lines = []
+    for line in fstab.read_text().splitlines():
+        fields = line.split()
+        if len(fields) >= 4 and fields[1] == esp:
+            options = [x for x in fields[3].split(',') if x != 'noauto'
+                       and not x.startswith(('x-systemd.automount', 'x-systemd.idle-timeout'))]
+            fields[3] = ','.join(options) or 'defaults'
+            line = '\t'.join(fields)
+        lines.append(line)
+    fstab.write_text('\n'.join(lines) + '\n')
+    run(['systemctl', 'daemon-reload'])
+    Path(esp).mkdir(exist_ok=True)
+    run(['mount', '-t', 'vfat', partitions[0], esp])
+    filesystem = run(['findmnt', '-n', '-o', 'FSTYPE', esp]).stdout.strip()
+    if filesystem != 'vfat':
+        raise RuntimeError('Guest ESP is not a regular vfat mount: ' + filesystem)
+    say('A1708_VM_ESP ' + esp + ' ' + filesystem)
     Path('/etc/default/limine').write_text(
-        f'ESP_PATH={shlex.quote(esp)}\nKERNEL_CMDLINE[default]={shlex.quote(cmdline)}\n'
+        f'ESP_PATH={shlex.quote(esp)}\nKERNEL_CMDLINE[default]+={shlex.quote(cmdline)}\n'
         'ENABLE_UKI=yes\nMKINITCPIO_FALLBACK=no\nENABLE_LIMINE_FALLBACK=yes\n'
         'BOOT_ORDER="linux, *"\n')
     run(['pacman', '-Syu', '--noconfirm', '--needed', 'limine', 'limine-mkinitcpio-hook', 'efibootmgr'])
